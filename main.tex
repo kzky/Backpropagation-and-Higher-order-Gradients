@@ -1,0 +1,2796 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+
+\title{Backpropagation and Higher-order Gradients}
+\author{Kazuki Yoshiyama}
+\date{July 2020}
+
+\usepackage{natbib}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\usepackage{mathtools}
+\DeclarePairedDelimiter\ceil{\lceil}{\rceil}
+\DeclarePairedDelimiter\floor{\lfloor}{\rfloor}
+
+\begin{document}
+
+\maketitle
+
+\abstract{This is the mathematical notes for computing the first-order gradients of functions and higher-order gradients in terms of mathematical view.}
+
+\section{Introduction}
+\label{sec:intro}
+
+This is the mathematical notes for computing the first-order gradients of functions and higher-order gradients. We can universally support the $n$-th order gradients, i.e., the infinite order gradients by definition of the first-order gradients and construction of the implementation of a computational graph. Note that the latter is out-of-scope in this technical notes. \\
+
+The first-order gradients of many functions can be computed by the combination of other functions, and also there sometimes exists a periodic pattern among $n$-th order gradients of a function (e.g., $sin$ and $cos$ functions). Thus, we do not need to consider really messy derivation for $n$-th order gradients for almost all functions.\\
+
+The function inputs are generally denoted by $x$, $w$ for trainable parameters, and $y$ for outputs. The first-order gradient operator is denoted by $d$, or $\frac{\partial L}{\partial \cdot}$ where $L$ is the objective in an optimization problem and $\cdot$ is of the w.r.t.. The $n$-th gradient operator is denoted by $d_n := \frac{\partial L_n}{\partial \cdot}$. We generally use the gradient operator up to $d_2$ mainly because of the periodicity. In case of the first-order gradients, we generally omit the suffix for simpler notations.\\
+
+
+From the following section, a section shows a group of function, and subsection is for a specific function.
+
+\section{Neural Network Layer}
+\label{sec:Neural Network Layer}
+
+\subsection{Affine (Linear)}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = Wx + b
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx &&= W^T dy \label{eq:data_grad} \\
+  dW &&= dy x^T \label{eq:filter_grad}\\
+  db &&= dy.
+\end{eqnarray}
+
+If we take a gradient further in case of the backward pass,
+
+\begin{eqnarray}
+  d_2 x &&= (d_2d_1 W)^T d_1y \\
+  d_2 W &&= d_1y (d_2d_1 x)^T \\
+  d_2d_1 y &&= W (d_2d_1 x) + (d_2d_1 W) x + d_2d_1b.
+\end{eqnarray}
+
+Interestingly, the first equation is same as \eqref{eq:data_grad} as a function, the second equation is same as \eqref{eq:filter_grad} also as a function, and finally the third equation is same as the forward pass definition of the affine, all are same as a function but with the different inputs. Thus, we can reuse the existing implementation, and also there are a cycle among the n-th order gradients.\\
+
+This interesting pattern can also be seen in other functions, we sometimes note that in each function.
+
+\subsection{Convolution}
+
+The convolution is the same operation as affine's but within a receptive field. Thus, we can apply the same argument of the affine for the backward and higher-order gradients.
+
+% \subsection{FusedConvolution}
+
+% Forward pass:
+
+% \begin{eqnarray}
+%   y = ReLU(Add(BatchNorm(x), z)).
+% \end{eqnarray}
+% %
+% Backward pass:
+
+% \begin{eqnarray}
+%   dx0 &&= dReLU(dy) \\
+%   dx_1 &&= dx0 \\
+%   dz &&= dx0 \\
+%   dx &&= dBatchNorm(dx_1).
+% \end{eqnarray}
+
+\subsection{DepthwiseConvolution}
+
+The depthwise convolution is the same operation of the convolution in the forward and backward except that the convolution does not happens over the feature dimension. Thus, we can apply the same argument of the affine for the backward and higher-order gradients.
+
+\subsection{Deconvolution}
+The deconvolution is the opposite operation of the convolution in the forward and backward pass. Thus, we can apply the same argument of the affine for the backward and higher-order gradients. The only exception is the padding case. For some padding patterns, we can not use the directly opposite operations.
+
+\subsection{DepthwiseDeconvolution}
+
+The depthwise convolution is the same operation of the deconvolution in the forward and backward except that the convolution does not happens over the feature dimension. Thus, we can apply the same argument of the affine for the backward and higher-order gradients.
+
+\subsection{RNN}
+
+Forward pass:
+
+\begin{eqnarray}
+  TODO.
+\end{eqnarray}
+
+This is a composite function of affines and non-linearity. Thus, we can reuse those functions.
+
+\subsection{LSTM}
+
+Forward pass:
+
+\begin{eqnarray}
+  TODO.  
+\end{eqnarray}
+
+This is a composite function of affines and non-linearity. Thus, we can reuse those functions.
+
+\subsection{GRU}
+
+Forward pass:
+
+\begin{eqnarray}
+  TODO.  
+\end{eqnarray}
+
+This is a composite function of affines and non-linearity. Thus, we can reuse those functions.
+
+
+\section{Pooling}
+
+\subsection{MaxPooling}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_{i_1, i_2} = \max_{k_1, k_2 \in K} (x_{i_1 + k_1, i_2 + k_2}).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_{i_1 + k_1, i_2 + k_2} &&= dy_{i_1, i_2}, \\
+  k_1, k_2 &&= \arg \max_{k_1, k_2 \in K} (x_{i_1 + k_1, i_2 + k_2}).
+\end{eqnarray}
+
+The second order gradient is the maxpooling of $d_2d_1 x_{i_1 + k_1, i_2 + k_2}$ again. Thus, we have a periodic relationship the gradient operators: $d_0(\cdot) = d_2(\cdot), d_1(\cdot) = d_3(\cdot), \ldots$.
+
+
+\subsection{AveragePooling}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_{i_1, i_2} = \frac{1}{K_1 K_2} \sum_{k1} \sum_{k2} x_{i_1 + k_1, i_2 + k_2}    
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_{i_1 + k_1, i_2 + k_2} = dy_{i_1, i_2} \times \frac{1}{K_1K_2}.
+\end{eqnarray}
+
+Note that the backward of the average pooling is simply the broadcast in the receptive field and multiplication.
+
+The second order gradient is the average pooling of $d_2d_1 x_{i_1 + k_1, i_2 + k_2}$ again. Thus, we have a periodic relationship of the gradient operators: $d_0(\cdot) = d_2(\cdot), d_1(\cdot) = d_3(\cdot), \ldots$.
+
+
+\subsection{GlobalAveragePooling}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_{i_1, i_2} = \frac{1}{K_1 K_2} \sum_{k1} \sum_{k2} x_{i_1 + k_1, i_2 + k_2}    
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_{i_1 + k_1, i_2 + k_2} = dy_{i_1, i_2} \times \frac{1}{K_1K_2}.
+\end{eqnarray}
+
+Note that the backward of the global average pooling is simply the broadcast in the receptive field (over input feature map) and multiplication.
+The second order gradient is the global average pooling of $d_2d_1 x_{i_1 + k_1, i_2 + k_2}$ again. Thus, we have a periodic relationship the gradient operators: $d_0(\cdot) = d_2(\cdot), d_1(\cdot) = d_3(\cdot), \ldots$.
+
+\subsection{SumPooling}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_{i_1, i_2} = \sum_{k1} \sum_{k2} x_{i_1 + k_1, i_2 + k_2}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_{i_1 + k_1, i_2 + k_2} = d y_{i_1, i_2}.
+\end{eqnarray}
+
+Note that the backward of the sum pooling is simply the broadcast in the receptive field.
+
+The second order gradient is the sum pooling of $d_2d_1 x_{i_1 + k_1, i_2 + k_2}$ again. Thus, we have a periodic relationship the gradient operators: $d_0(\cdot) = d_2(\cdot), d_1(\cdot) = d_3(\cdot), \ldots$.
+
+
+\subsection{Unpooling}
+Unpooling is the broadcast in the receptive field. \\ \\
+%
+Forward pass:
+
+\begin{eqnarray}
+  y_{k_1 i_1 + j_1, k_2 i_2 + j_2} = x_{i_1, i_2}
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_{i_1, i_2} = \sum_{k1} \sum_{k2} dy_{k_1 i_1 + j_1, k_2 i_2 + j_2}
+\end{eqnarray}
+
+The second order gradient is the unpooling of $d_2d_1 x_{i_1, i_2}$ again. Thus, we have a periodic relationship the gradient operators: $d_0(\cdot) = d_2(\cdot), d_1(\cdot) = d_3(\cdot), \ldots$.
+
+\subsection{Embed}
+Embed is the affine function but with a fixed look-up indices. \\ \\
+%
+\begin{eqnarray}
+  y = Wx.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dW = dy x^T.
+\end{eqnarray}
+%
+If we take a gradient further in case of the backward pass,
+
+\begin{eqnarray}
+  d_2d_1 y = (d_2d_1 W) x.
+\end{eqnarray}
+
+
+\section{Activation Function}
+\label{sec:Neural Network Activation Functions}
+
+\subsection{Sigmoid}
+
+Forward pass:
+
+\begin{eqnarray}
+  \sigma(x) = \frac{1}{1 + \exp(-x)}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = dy \times \sigma(x) (1 - \sigma(x)).
+\end{eqnarray}
+
+
+\subsection{Swish}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i &&= \frac{x_i}{1 + \exp(-x_i)} \\
+      &&= x_i \sigma(x_i).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \times \sigma(x_i) (1 + x_i (1 - \sigma(x_i))).
+\end{eqnarray}
+
+\subsection{Tanh}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \tanh (x_i).    
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i (1 - \tanh^2(x_i)).
+\end{eqnarray}
+
+
+\subsection{ReLU}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \max (0, x_i).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \begin{cases}
+     1 & (x > 0) \\
+     0 & ({\rm otherwise})
+  \end{cases}.
+\end{eqnarray}
+
+
+\subsection{LeakyReLU}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \alpha * \min(0, x_i) + \max (0, x_i).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \begin{cases}
+     1      & (x > 0) \\
+     \alpha & ({\rm otherwise})
+  \end{cases}. 
+\end{eqnarray}
+
+
+\subsection{Softmax}
+
+Forward pass:
+
+\begin{eqnarray}
+  \sigma(x_i) = \frac{\exp(x_i)}{\sum_j \exp(x_j)}
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_j &&= \sum_i dy_i \sigma(x_i) (\delta_{ij} - \sigma(x_j)) \\
+       &&= dy_j \sigma(x_j) - \sigma(x_j) \sum_i dy_i \sigma(x_i).
+\end{eqnarray}
+
+
+\subsection{LogSoftmax}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \log \frac{\exp(x_i)}{\sum_j \exp(x_j)}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_j &&= \sum_i dy_i (\delta_{ij} - \sigma(x_j)) \\
+       &&= dy_j  - \sigma(x_j) \sum_i dy_i.
+\end{eqnarray}
+
+
+\subsection{ELU}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i= \left\{
+  \begin{array}{ll}
+    x_i & (x > 0)\\
+    \alpha (\exp(x_i) - 1) & (x \leq 0)
+  \end{array} \right..
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i= dy_i \left\{
+  \begin{array}{ll}
+    1 & (x > 0)\\
+    \alpha \exp(x_i) & (x \leq 0)
+  \end{array} \right.. 
+\end{eqnarray}
+
+
+\subsection{SELU}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i= \lambda \left\{
+  \begin{array}{ll}
+    x_i & (x > 0)\\
+    \alpha (\exp(x_i) - 1) & (x \leq 0)
+  \end{array} \right..
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i= dy_i \lambda \left\{
+  \begin{array}{ll}
+    1 & (x > 0)\\
+    \alpha \exp(x_i) & (x \leq 0)
+  \end{array} \right.. 
+\end{eqnarray}
+
+
+\subsection{CReLU}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = [\max(0, x), \max(0, -x)].
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = 
+  dy_0 \left\{
+  \begin{array}{ll}
+    1 & (x > 0)\\
+    0 & (x \leq 0)
+  \end{array} \right. 
+  - 
+  dy_1 \left\{
+  \begin{array}{ll}
+    1 & (-x > 0)\\
+    0 & (-x \leq 0)
+  \end{array} \right.,
+\end{eqnarray}
+%
+where $dy_0$ and $dy_1$ are corresponding parts by the concatenation.
+
+
+\subsection{CELU}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i= [elu(x_i), elu(-x_i)].
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = 
+  dy_0 \left\{
+  \begin{array}{ll}
+    1 & (x > 0)\\
+    \alpha \exp(x_i) & (x \leq 0)
+  \end{array} \right. 
+  - 
+  dy_1 \left\{
+  \begin{array}{ll}
+    1 & (-x > 0)\\
+    \alpha \exp(-x_i) & (-x \leq 0)
+  \end{array} \right.,
+\end{eqnarray}
+%
+where $dy_0$ and $dy_1$ are corresponding parts by the concatenation.
+
+\subsection{PReLU}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \max(0, x_i) + w_i \min(0, x_i).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i &&= dy_i \left\{
+  \begin{array}{ll}
+    1   & (x > 0)\\
+    w_i & (x \leq 0)
+  \end{array} \right., \\
+  w_i &&= dy_i \left\{
+  \begin{array}{ll}
+    0   & (x > 0)\\
+    x_i & (x \leq 0)
+  \end{array} \right.
+\end{eqnarray}
+%
+Take care that we have to take the summation over the other dimensions other than $i$.
+%
+In case of the shared $w$,
+
+\begin{eqnarray}
+  dx_i &&= dy_i \left\{
+  \begin{array}{ll}
+    1   & (x > 0)\\
+    w_i & (x \leq 0)
+  \end{array} \right., \\
+  w &&= \sum_ i dy_i \left\{
+  \begin{array}{ll}
+    0   & (x > 0)\\
+    x_i & (x \leq 0)
+  \end{array} \right.
+\end{eqnarray}
+%
+Take care that we also have to take the summation over the other dimensions other than $i$.
+
+\subsection{GELU}
+
+Forward pass:
+
+\begin{eqnarray}
+  GELU(x) &&= x P(X \leq  x) = x \Phi (x)  \\
+   && \approx 0.5x \times (1 + \tanh \left( \sqrt{\frac{2}{\pi}}(x + 0.044715 x^3) \right))
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx &&= dy \left( 0.5u + 0.5x (1 - \tanh^2(v))\sqrt{2/\pi} (1 + 0.134145 x^2) \right) \\
+  u &&= 1 + \tanh (v) \\
+  v &&= \sqrt{2/\pi} (x + 0.044715 x^3).
+\end{eqnarray}
+
+
+\subsection{ReLU6}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = \min(\max(0,x), 6).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \begin{cases}
+     0 & (x >= 6) \\
+     1 & ({\rm otherwise}) \\
+     0 & (x <= 0)
+  \end{cases}.
+\end{eqnarray}
+
+\subsection{HardSigmoid}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = \begin{cases}
+     1 & (x >= 2.5) \\
+     0.2 x + 0.5 & ({\rm otherwise}) \\
+     0 & (x <= -2.5)
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = dy \begin{cases}
+     0 & (x > 2.5) \\
+     0.2 & ({\rm otherwise}) \\
+     0 & (x < -2.5)
+  \end{cases}. 
+\end{eqnarray}
+
+
+\subsection{HardTanh}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = x \begin{cases}
+     1 & (x > 1) \\
+     x & ({\rm otherwise}) \\
+     -1 & (x < -1)
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = dy \begin{cases}
+     0 & (x >= 1) \\
+     1 & ({\rm otherwise}) \\
+     0 & (x <= -1)
+  \end{cases}.
+\end{eqnarray}
+
+
+\subsection{LogSigmoid}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i &&= \log(1 / (1 + \exp(-x_i)))  \\
+      &&= \log(\sigma(x_i)).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i (1 - \sigma(x_i)). 
+\end{eqnarray}
+
+\subsection{SoftPlus}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \log(1+\exp(x_i)).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \frac{\exp(x_i)}{1 + \exp(x_i)}.
+\end{eqnarray}
+
+\subsection{SoftSign}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = x/(1+|x|).    
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = dy \frac{1}{(1 + |x)|)^2}.
+\end{eqnarray}
+
+
+\subsection{TanhShrink}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = x - \tanh(x).    
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = dy \left(1 - (1 - \tanh^2(x))\right).
+\end{eqnarray}
+
+\subsection{Sinc}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = \begin{cases}
+     \frac{\sin(x)}{x} & (x \neq 0) \\
+     1 & ({\rm otherwise})
+  \end{cases}. 
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = dy \begin{cases}
+     \frac{\cos(x)  - sinc(x)}{x} & (x \neq 0) \\
+     0 & ({\rm otherwise})
+  \end{cases}. \end{eqnarray}
+
+
+\section{Normalization}
+\label{sec:Normalization}
+
+\subsection{BatchNormalization}
+
+Forward pass (Training):
+
+\begin{eqnarray}
+  \mu &&= \frac{1}{M} \sum x_i \\
+  \sigma^2 &&= \frac{1}{M} \left(\sum x_i - \mu\right)^2 \\
+  \hat{x}_i &&= \frac{x_i - \mu}{\sqrt{\sigma^2 + \epsilon}} \\
+  y_i &&= \hat{x}_i \gamma + \beta.
+\end{eqnarray}
+%
+Forward pass (Test):
+
+\begin{eqnarray}
+  y_i = \gamma \frac{x_i - \mu_r}{\sqrt{\sigma_r^2 + \epsilon}} + \beta
+\end{eqnarray}
+%
+Backward pass (Training):
+
+\begin{eqnarray}
+  d\hat{x}_i &&= dy_i \cdot \gamma, \\
+  d\sigma^2 &&= \sum_{i=1}^m d\hat{x}_i \cdot (x_i - \mu) \cdot \frac{-1}{2}(\sigma^2 + \epsilon)^{-3/2}, \\
+  d\mu &&= \frac{-1}{\sqrt{\sigma^2 + \epsilon}} \sum_{i=1}^{m} d\hat{x}_i, \\
+  dx_i &&= d\hat{x}_i \frac{1}{\sqrt{\sigma^2 + \epsilon}} + d\sigma^2 \frac{2(x_i - \mu)}{m} + d\mu \cdot \frac{1}{m}, \\
+  d\gamma &&= \sum_{i=1}^{m} dy_i \cdot \hat{x}_i, \\
+  d\beta &&= \sum_{i=1}^{m} dy_i.
+\end{eqnarray}
+
+Note \href{https://arxiv.org/abs/1502.03167}{the original batch normalization paper} includes the redundant term in the gradient w.r.t. the mean input. It is explicitly excluded in the above gradient derivation.\\\\
+%
+Backward pass (Test):
+
+\begin{eqnarray}
+  dx_i &&= dy_i \frac{\gamma}{\sqrt{\sigma_r^2 + \epsilon}} \\
+  d\gamma &&= \sum_i dy_i \frac{x_i - \mu_r}{\sqrt{\sigma_r^2 + \epsilon}} \\
+  d\beta &&= \sum_i dy_i.
+\end{eqnarray}
+
+\subsection{SyncBatchNormalization}
+
+Formulation is same as the batch normalization, but the running mean/variance are computed over multiple devices.
+
+\subsection{WeightNormalization}
+
+Forward pass (for one filter):
+
+\begin{eqnarray}
+  && \hat{v} = g \odot v \odot s^{-1/2}, \\
+  && s = \sum_i v_i^2 + \epsilon \\
+  && g \in \mathbb{R}, v \in \mathbb{R}^D
+\end{eqnarray}
+%
+Backward pass (for one filter):
+
+\begin{eqnarray}
+  dv_j &&= d\hat{v}_j \odot g \odot s^{-1/2} - \left( \sum_i d\hat{v}_i v_i \right) \odot g \odot s^{-3/2} \odot v_j, \\
+  dg &&= \sum_{i} d\hat{v}_i v_i \odot s^{-1/2}.
+\end{eqnarray}
+
+\subsection{Norm}
+
+Forward pass:
+
+\begin{eqnarray}
+    y = \|x\|_p = \left( \sum_i |x_i|^p \right)^{\frac{1}{p}}
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+    dx_i = dy \times \left( \sum_i |x_i|^p \right)^{\frac{1}{p} - 1} \times
+    \begin{cases}
+     |x_i|^{p-1} & (x_i >= 0) \\
+     -|x_i|^{p-1} & ({\rm otherwise})
+  \end{cases}. 
+\end{eqnarray}
+
+\subsection{NormNormalize}
+
+Forward pass:
+
+\begin{eqnarray}
+    y &&= x_i \times \left( \sum_i |x_i|^p \right)^{-\frac{1}{p}} \\
+      &&= \frac{x_i}{\|x\|_p}
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+    dx_i = dy \times \left( \sum_i |x_i|^p \right)^{-\frac{1}{p}} + dy \times \left( \sum_i |x_i|^p \right)^{-\frac{1}{p} - 1} \times
+    \begin{cases}
+     x_i^2 & (x_i >= 0) \\
+     -x_i^2 & ({\rm otherwise})
+  \end{cases}. 
+\end{eqnarray}
+
+\section{Reduction}
+\label{sec:Reduction}
+
+\subsection{Sum}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = \sum_{i} x_i.
+\end{eqnarray}
+%
+Backward pass (broadcast):
+
+\begin{eqnarray}
+  dx_i = dy.
+\end{eqnarray}
+
+
+\subsection{Mean}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = \sum_{i}^{N} x_i / N.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy / N.
+\end{eqnarray}
+
+
+\subsection{Max}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = \max_{i} x_i.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy \begin{cases}
+     1 & (i = \arg\max_i (x_i) \\
+     0 & ({\rm otherwise})
+  \end{cases}.
+\end{eqnarray}
+
+
+\subsection{Min}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = \min_{i} x_i.    
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy \begin{cases}
+     1 & (i = \arg\min_i (x_i) \\
+     0 & ({\rm otherwise})
+  \end{cases}. 
+\end{eqnarray}
+
+
+\subsection{Prod}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = \Pi_{i} x_i.    
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy \Pi_{j \neq i} x_j.
+\end{eqnarray}
+
+\subsection{Cumsum}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \sum_{j < i} x_j.
+\end{eqnarray}
+%
+Backward pass (reverse cumsum):
+
+\begin{eqnarray}
+  dx_k = \sum_{i > k} dy_i.
+\end{eqnarray}
+
+\subsection{Cumprod}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \Pi_{j < i} x_j
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_k = \sum_{i > k} (dy_i \Pi_{j < i, j \neq k} x_j).
+\end{eqnarray}
+
+
+\section{Arithmetic}
+\label{sec:Arithmetic}
+
+\subsection{Add2}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = x^{(0)}_i + x^{(1)}_i.    
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(0)}_i = dy_i, \\
+  dx^{(1)}_i = dy_i.
+\end{eqnarray}
+
+
+\subsection{AddN}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = x^{(0)}_i + . . . + x^{(n-1)}_i.    
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+   dx^{(m)}_i = dy_i
+\end{eqnarray}
+
+\subsection{Sub2}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = x^{(0)}_i - x^{(1)}_i.    
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(0)}_i = dy_i, \\
+  dx^{(1)}_i = -dy_i. 
+\end{eqnarray}
+
+
+\subsection{Mul2}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = x^{(0)}_i x^{(1)}_i.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(0)}_i = dy_i \times x^{(1)}_i, \\
+  dx^{(1)}_i = dy_i \times x^{(0)}_i.  
+\end{eqnarray}
+
+
+\subsection{MulN}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = x^{(0)}_i . . . x^{(n-1)}_i.    
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(m)}_i = dy_i \Pi_{n \neq m} x^{(n)}_i.
+\end{eqnarray}
+
+
+\subsection{Div2}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \frac{x^{(0)}_i} {x^{(1)}_i}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(0)}_i &&= dy_i x^{(1)}_i, \\
+  dx^{(1)}_i &&= - dy_i \frac{x^{(0)}_i}{(x^{(1)}_i) ^2}.
+\end{eqnarray}
+
+
+\subsection{Pow2}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = {(x^{(0)}_i)} ^ {x^{(1)}_i}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(0)}_i &&= dy_i \times x^{(1)}_i \times {(x^{(0)}_i)} ^ {x^{(1)}_i -1}, \\
+  dx^{(1)}_i &&= dy_i \times {(x^{(0)}_i)} ^ {x^{(1)}_i} \times  \log{x^{(0)}_i}.
+\end{eqnarray}
+
+
+\subsection{AddScalar}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = x_i + v.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i.
+\end{eqnarray}
+
+
+\subsection{MulScalar}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = v x_i.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i v.
+\end{eqnarray}
+
+
+\subsection{PowScalar}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = (x_i) ^ v.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \times v \times (x_i) ^ {v - 1}.
+\end{eqnarray}
+
+
+\subsection{RSubScalar}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = v - x_i.    
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = - dy_i 
+\end{eqnarray}
+
+
+\subsection{RDivScalar}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \frac{v}{x_i}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = - dy_i \frac{v}{x_i^2}.
+\end{eqnarray}
+
+
+\subsection{RPowScalar}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = v ^ {x_i}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \times v ^ {x_i} \times \log{v}.
+\end{eqnarray}
+
+\section{Logical}
+\label{sec:Logical}
+
+\subsection{Sign}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = \begin{cases}
+    1  & (x > 0) \\
+    -1 & (x < 0) \\
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass (Zero sub-gradient):
+
+\begin{eqnarray}
+  dx = 0.
+\end{eqnarray}
+%
+Backward pass (Straight-Through-Estimator):
+
+\begin{eqnarray}
+  dx = dy. 
+\end{eqnarray}
+
+\subsection{Minimum2}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \min(x^{(0)}_i, x^{(1)}_i).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(0)}_i = dy_i \begin{cases}
+    1  & (x^{(0)}_i < x^{(1)}_i) \\
+    0 & ({\rm otherwise})
+  \end{cases}\\
+  dx^{(1)}_i = dy_i \begin{cases}
+    1  & (x^{(1)}_i < x^{(0)}_i) \\
+    0 & ({\rm otherwise})
+  \end{cases}
+\end{eqnarray}
+
+\subsection{Maximum2}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \max(x^{(0)}_i, x^{(1)}_i).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(0)}_i = dy_i \begin{cases}
+    1  & (x^{(0)}_i > x^{(1)}_i) \\
+    0 & ({\rm otherwise})
+  \end{cases}\\
+  dx^{(1)}_i = dy_i \begin{cases}
+    1  & (x^{(1)}_i > x^{(0)}_i) \\
+    0 & ({\rm otherwise})
+  \end{cases}
+\end{eqnarray}
+
+
+\subsection{MinimumScalar}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \min(x_i, v).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(0)}_i = dy_i \begin{cases}
+    1  & (x^{(0)}_i < v) \\
+    0 & ({\rm otherwise})
+  \end{cases}\\ 
+\end{eqnarray}
+
+\subsection{MaximumScalar}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \max (x_i, v).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(0)}_i = dy_i \begin{cases}
+    1  & (x^{(0)}_i > v) \\
+    0 & ({\rm otherwise})
+  \end{cases}\\ 
+\end{eqnarray}
+
+
+\subsection{LogicalAnd}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x^{(0)}_i,x^{(1)}_i) = \begin{cases}
+    1 & (x^{(0)}_i \neq 0 \;\&\; x^{(1)}_i \neq 0) \\
+    0 & {\rm otherwise}
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(\cdot)}_i = 0.
+\end{eqnarray}
+
+\subsection{LogicalOr}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x^{(0)}_i,x^{(1)}_i) = \begin{cases}
+    0 & (x^{(0)}_i = 0 \;\&\; x^{(1)}_i = 0) \\
+    1 & {\rm otherwise}
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(\cdot)}_i = 0.
+\end{eqnarray}
+\subsection{LogicalXor}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x^{(0)}_i,x^{(1)}_i) = \begin{cases}
+    1 & (x^{(0)}_i = 0 \;\&\; x^{(1)}_i = 0) \\
+    1 & (x^{(0)}_i \neq 0 \;\&\; x^{(1)}_i \neq 0) \\
+    0 & {\rm otherwise}
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(\cdot)}_i = 0.
+\end{eqnarray}
+
+\subsection{Equal}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x^{(0)}_i,x^{(1)}_i) = \begin{cases}
+    1 & (x^{(0)}_i = x^{(1)}_i) \\
+    0 & {\rm otherwise}
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(\cdot)}_i = 0.
+\end{eqnarray}
+
+\subsection{NotEqual}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x^{(0)}_i,x^{(1)}_i) = \begin{cases}
+    0 & (x^{(0)}_i = x^{(1)}_i) \\
+    1 & {\rm otherwise}
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(\cdot)}_i = 0.
+\end{eqnarray}
+
+\subsection{GreaterEqual}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x^{(0)}_i,x^{(1)}_i) = \begin{cases}
+    1  & (x^{(0)}_i \geq x^{(1)}_i) \\
+    0 & (x^{(0)}_i < x^{(1)}_i)
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(\cdot)}_i = 0.
+\end{eqnarray}
+\subsection{Greater}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x^{(0)}_i,x^{(1)}_i) = \begin{cases}
+    1  & (x^{(0)}_i > x^{(1)}_i) \\
+    0 & (x^{(0)}_i \leq x^{(1)}_i)
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(\cdot)}_i = 0.
+\end{eqnarray}
+
+\subsection{LessEqual}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x^{(0)}_i,x^{(1)}_i) = \begin{cases}
+    1  & (x^{(0)}_i \leq x^{(1)}_i) \\
+    0 & (x^{(0)}_i > x^{(1)}_i)
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(\cdot)}_i = 0.
+\end{eqnarray}
+
+\subsection{Less}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x^{(0)}_i,x^{(1)}_i) = \begin{cases}
+    1  & (x^{(0)}_i < x^{(1)}_i) \\
+    0 & (x^{(0)}_i \geq x^{(1)}_i)
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(\cdot)}_i = 0.
+\end{eqnarray}
+
+\subsection{LogicalAndScalar}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x_i,v) = \begin{cases}
+    1 & (x_i \neq 0 \;\&\; v \neq 0) \\
+    0 & {\rm otherwise}
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = 0.
+\end{eqnarray}
+
+\subsection{LogicalOrScalar}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x_i,v) = \begin{cases}
+    0 & (x_i = 0 \;\&\; v = 0) \\
+    1 & {\rm otherwise}
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = 0.
+\end{eqnarray}
+
+\subsection{LogicalXorScalar}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x_i,v) = \begin{cases}
+    1 & (x_i = 0 \;\&\; v = 0) \\
+    1 & (x_i \neq 0 \;\&\; v \neq 0) \\
+    0 & {\rm otherwise}
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = 0.
+\end{eqnarray}
+
+\subsection{EqualScalar}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x_i,v) = \begin{cases}
+    1 & (x_i = v) \\
+    0 & {\rm otherwise}
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = 0.
+\end{eqnarray}
+
+\subsection{NotEqualScalar}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x_i,v) = \begin{cases}
+    0 & (x_i = v) \\
+    1 & {\rm otherwise}
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = 0.
+\end{eqnarray}
+
+\subsection{GreaterEqualScalar}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x_i,v) = \begin{cases}
+    1  & (x_i \geq v \\
+    0 & (x_i < v
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = 0.
+\end{eqnarray}
+
+\subsection{GreaterScalar}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x_i,v) = \begin{cases}
+    1  & (x_i > v \\
+    0 & (x_i \leq v
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = 0.
+\end{eqnarray}
+
+\subsection{LessEqualScalar}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x_i,v) = \begin{cases}
+    1  & (x_i \leq v) \\
+    0 & (x_i > v)
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = 0.
+\end{eqnarray}
+
+\subsection{LessScalar}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x_i,v) = \begin{cases}
+    1  & (x_i < v) \\
+    0 & (x_i \geq v)
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = 0.
+\end{eqnarray}
+
+\subsection{LogicalNot}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x_i) = \begin{cases}
+    1 & (x_i = 0) \\
+    0 & {\rm otherwise}
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(\cdot)}_i = 0.
+\end{eqnarray}
+
+\subsection{Where}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = \begin{cases}
+    x_{true}  & (cond) \\
+    x_{false} & (not \ cond)
+  \end{cases}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_{true} = dy \begin{cases}
+    1  & (cond) \\
+    0 & (not\ cond)
+  \end{cases}, \\
+  dx_{false} = dy \begin{cases}
+    0 & (cond) \\
+    1 & (not\ cond)
+  \end{cases}.
+\end{eqnarray}
+
+
+\section{Math}
+\label{sec:Math}
+
+\subsection{Constant}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = const.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(\cdot)} = 0.
+\end{eqnarray}
+
+\subsection{Arange}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = arange(start, stop, step)
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(\cdot)} = 0.
+\end{eqnarray}
+
+\subsection{Abs}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = |x_i|    
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \begin{cases}
+    1 & (x \geq 0) \\
+    -1 & ({\rm otherwise})
+  \end{cases}.
+\end{eqnarray}
+
+
+\subsection{Exp}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \exp(x_i).    
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \exp(x_i).  
+\end{eqnarray}
+
+
+\subsection{Log}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \ln(x_i).    
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \frac{1}{x_i}.
+\end{eqnarray}
+
+
+\subsection{Identity}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = x
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = dy.
+\end{eqnarray}
+
+
+\subsection{BatchMatmul}
+
+Forward pass:
+
+\begin{eqnarray}
+  R = P Q.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dP = dR \ Q^T, \\
+  dQ = P^T \ dR.
+\end{eqnarray}
+%
+This is the case where no transpose occurs. If there is a transpose operation, we have to consider the order of the matrix multiplication and the transpose of the operand matrices.
+
+Similar to the affine in the case of $n$-th order gradients, there is also periodic pattern. Thus, we can reuse the forward pass of the batch matmul for computing $n$-th order gradients.
+
+\subsection{Round}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = round(x_i).    
+\end{eqnarray}
+%
+Backward pass (Zero sub-gradient):
+
+\begin{eqnarray}
+  dx_i = 0.
+\end{eqnarray}
+%
+Backward pass (Straight-Through-Estimator):
+
+\begin{eqnarray}
+  dx_i = dy_i. 
+\end{eqnarray}
+
+
+\subsection{Ceil}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = ceil(x_i).  
+\end{eqnarray}
+%
+Backward pass (Zero sub-gradient):
+
+\begin{eqnarray}
+  dx_i = 0.
+\end{eqnarray}
+%
+Backward pass (Straight-Through-Estimator):
+
+\begin{eqnarray}
+  dx_i = dy_i. 
+\end{eqnarray}
+
+\subsection{Floor}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = floor(x_i).
+\end{eqnarray}
+%
+Backward pass (Zero sub-gradient):
+
+\begin{eqnarray}
+  dx_i = 0.
+\end{eqnarray}
+%
+Backward pass (Straight-Through-Estimator):
+
+\begin{eqnarray}
+  dx_i = dy_i. 
+\end{eqnarray}
+
+\subsection{Sin}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \sin (x_i).    
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \cos(x_i).
+\end{eqnarray}
+
+
+\subsection{Cos}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \cos (x_i).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = -dy_i \sin(x_i).
+\end{eqnarray}
+
+
+\subsection{Tan}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \tan (x_i).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \frac{1}{\cos(x_i)^2}. 
+\end{eqnarray}
+
+
+\subsection{Sinh}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \sinh (x_i).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \cosh(x_i).
+\end{eqnarray}
+
+
+\subsection{Cosh}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \cosh (x_i).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \sinh(x_i).
+\end{eqnarray}
+
+
+\subsection{ASin}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = asin (x_i).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \frac{1}{\sqrt{1 - x^2}}.
+\end{eqnarray}
+
+
+\subsection{ACos}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = acos (x_i).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \frac{-1}{\sqrt{1 - x^2}}.
+\end{eqnarray}
+
+
+\subsection{ATan}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = atan (x_i).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \frac{1}{1 + x^2}.
+\end{eqnarray}
+
+
+\subsection{ATan2}
+
+Forward pass:
+
+\begin{eqnarray}
+  z = atan2(y, x) = 2 \times arctan(\frac{y}{\sqrt{x^2 + y^2} + x})
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dy = dz \frac{x}{x^2 + y^2}, \\
+  dx = dz \frac{-y}{x^2 + y^2}
+\end{eqnarray}
+
+
+\subsection{ASinh}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = asinh (x_i).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \frac{1}{\sqrt{x^2 + 1}}.
+\end{eqnarray}
+
+
+\subsection{ACosh}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = acosh (x_i).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \frac{1}{\sqrt{x^2 - 1}}.
+\end{eqnarray}
+
+\subsection{ATanh}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = atanh (x_i).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dy_i \frac{1}{1 - x^2}.
+\end{eqnarray}
+
+
+\section{Array Manipulation}
+\label{sec:Array Manipulation}
+
+The backward of array manipulations is simply that the in-coming gradients go back to the location where the data comes from in the forward pass. Sometimes, there are the opposite relationship like the backward pass of the concatenation is the forward pass of the split.
+
+\subsection{Concatenate}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = [x_1, \ldots, x_n].
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  [dx_1, \ldots, dx_n] = dy.
+\end{eqnarray}
+
+
+\subsection{Split}
+
+Forward pass:
+
+\begin{eqnarray}
+  [y_1, \ldots, y_n] = x.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = [dy_1, \ldots, dy_n].
+\end{eqnarray}
+
+
+\subsection{Stack}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = [x_1, \ldots, x_n].
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  [dx_1, \ldots, dx_n] = dy.
+\end{eqnarray}
+
+
+\subsection{Slice}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = x[start_1:stop_1:step_1, ..., start_n:stop_n:step_n]
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx[start_1:stop_1:step_1, ..., start_n:stop_n:step_n] = dy.
+\end{eqnarray}
+
+
+\subsection{Pad}
+
+Forward pass (constant):
+
+\begin{eqnarray}
+  v(x) = \begin{cases}
+    c & (x < 0) \\
+    u(x) & ({\rm otherwise}) \\
+    c & (x > W - 1)
+    \end{cases}.
+\end{eqnarray}
+%
+Backward pass (constant):
+
+\begin{eqnarray}
+  du(x) = dv(x) \begin{cases}
+    0 & (x < 0) \\
+    1 & ({\rm otherwise}) \\
+    0 & (x > W - 1)
+    \end{cases}.
+\end{eqnarray}
+
+
+\subsection{Transpose}
+
+Forward pass:
+
+\begin{eqnarray}
+  y[i_1\ldots i_N] = x[T(i_1), \ldots T(i_N)].
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx[T(i_1), \ldots T(i_N)] = dy[i_1, \ldots i_N].
+\end{eqnarray}
+
+
+\subsection{Broadcast}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = x.
+\end{eqnarray}
+%
+Backward pass (sum):
+
+\begin{eqnarray}
+  dx = \sum_i dy_i.
+\end{eqnarray}
+
+
+\subsection{Tile}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = [x_1, \ldots, x_n, x_{n+1}, \ldots, x_{2n}, \ldots, x_{K \times (n-1) + 1}, \ldots, x_{K \times n}]
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = \sum_{j, mod(j, n) = i} dy_j.
+\end{eqnarray}
+
+
+\subsection{OneHot}
+
+Forward pass:
+
+\begin{eqnarray}
+  TODO.  
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  TODO.  
+\end{eqnarray}
+
+
+\subsection{Flip}
+
+Forward pass:
+
+\begin{eqnarray}
+  TODO.  
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  TODO.  
+\end{eqnarray}
+
+
+\subsection{Shift}
+
+Forward pass:
+
+\begin{eqnarray}
+  TODO.  
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  TODO.  
+\end{eqnarray}
+
+
+\subsection{Sort}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = sort(x)
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = dy[index\ of\ sort(x)].
+\end{eqnarray}
+
+\subsection{Reshape}
+
+Forward pass:\\
+
+Shape of an NdArray changes and strides consequently. \\ \\
+%
+Backward pass:
+
+\begin{eqnarray}
+  dy_i = dx_i, 
+\end{eqnarray}
+
+Shape of an NdArray changes and strides consequently. 
+
+
+\subsection{MatrixDiag}
+
+Forward pass:
+
+\begin{eqnarray}
+  \begin{bmatrix}
+    y_1 & & \\
+    & \ddots & \\
+    & & y_n 
+  \end{bmatrix}
+  = [x_1, \ldots, x_n].
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  [dx_1, \ldots, dx_n] = 
+  \begin{bmatrix}
+    dy_1 & & \\
+    & \ddots & \\
+    & & dy_n 
+  \end{bmatrix} 
+\end{eqnarray}
+
+
+\subsection{MatrixDiagPart}
+
+Forward pass:
+
+\begin{eqnarray}
+  [y_1, \ldots, y_n] = 
+  \begin{bmatrix}
+    x_1 & & \\
+    & \ddots & \\
+    & & x_n 
+  \end{bmatrix}
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  \begin{bmatrix}
+    dx_1 & & \\
+    & \ddots & \\
+    & & dx_n 
+  \end{bmatrix}
+  = [dy_1, \ldots, dy_n].
+\end{eqnarray}
+
+
+\subsection{BatchInv}
+
+Forward pass:
+
+\begin{eqnarray}
+  Y = X^{-1}.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dX = -(X^{-1})^T dY (X^{-1})^T
+\end{eqnarray}
+
+
+\subsection{BatchDet}
+
+Forward pass:
+
+\begin{eqnarray}
+  Y = det(X).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dX = dY \odot det(X) \odot (X^{-1})^T.
+\end{eqnarray}
+
+\subsection{BatchLogdet}
+
+Forward pass:
+
+\begin{eqnarray}
+  Y = \log(|\det(X)|).
+\end{eqnarray}
+%
+Backward pass:
+
+Composite backward of $BatchDet \rightarrow Abs \rightarrow Log$.
+
+\subsection{GatherNd}
+
+Forward pass:
+
+\begin{eqnarray}
+  U = GatherNd(O, I).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dO = ScatterNd(dU, I).
+\end{eqnarray}
+
+
+\subsection{ScatterNd}
+
+Forward pass:
+
+\begin{eqnarray}
+  O = ScatterNd(U, I).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dU = GatherNd(dO, I).
+\end{eqnarray}
+
+
+\section{Signal Processing}
+\label{sec:Signal Processing}
+
+\subsection{Linear interpolate}
+
+Notation of the linear interpolation function s slightly different from the others. Given the real-number query points $x, y$ on the 2D-spatial feature $u$, the interpolation coefficients are computed as
+
+\begin{eqnarray}
+  p_1 &=& x - \floor*{x}\\
+  p_0 &=& 1 - p_1 \\
+  q_1 &=& y - \floor*{y}\\
+  q_0 &=& 1 - q_1.
+\end{eqnarray}
+%
+Where-to-look, or where-to-fetch on the grid feature $u$ are denoted as
+\begin{eqnarray}
+  x_0 &=& \floor*{x} \\
+  x_1 &=& 1 - x_0 \\
+  y_0 &=& \floor*{y} \\
+  y_1 &=& 1 - y_0.
+\end{eqnarray}
+%
+See \href{https://en.wikipedia.org/wiki/Bilinear_interpolation}{the bilinear interpolation} for visual understanding. Then,  \\ \\
+%
+Forward pass:
+
+\begin{eqnarray}
+  v &=& p_0 * q_0* u(x_0, y_0) \\
+  &+& p_0 * q_1 * u(x_0, y_1) \\
+  &+& p_1 * q_0 * u(x_1, y_0) \\
+  &+& p_1 * q_1 * u(x_1, y_1) .
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  du(x_0, y_0) &=& dv * p_0 * q_0 \\
+  du(x_0, y_1) &=& dv * p_0 * q_1 \\
+  du(x_1, y_0) &=& dv * p_1 * q_0 \\
+  du(x_1, y_1) &=& dv * p_1 * q_1.
+\end{eqnarray}
+
+The second order gradient is the interpolation of $d_2d_1 u(\cdot, \cdot)$ again. Thus, we have a periodic relationship for the gradient operators: $d_0(\cdot) = d_2(\cdot), d_1(\cdot) = d_3(\cdot), \ldots$.\\
+
+This 2D linear interpolation can be generalized to the N-d case.
+
+\begin{equation}
+  v = \sum_{i_1, i_2, i_n \in \{0, 1\}} p_{i_1}\dots p_{i_n} u(x_{i_1}, \ldots x_{i_n}).
+\end{equation}
+
+\subsection{FFT}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = W_{FFT}x =: FFT(x).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = IFFT(dy).
+\end{eqnarray}
+%
+Take care of the normalization coefficient. In the normalized FFT, the backward does not need to deal with the normalized coefficient. In the unnormailzed FFT, the backward needs to address the normalization coefficient.
+
+\subsection{IFFT}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = W_{IFFT}x =: IFFT(x).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = FFT(dy).
+\end{eqnarray}
+%
+Take care of the normalization coefficient. In the normalized FFT, the backward does not need to deal with the normalized coefficient. In the unnormailzed FFT, the backward needs to address the normalization coefficient.
+
+\section{Stochasticity}
+\label{sec:Stochasticity}
+
+\subsection{Dropout}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = \left\{
+  \begin{array}{ll}
+    \frac{x}{1 - p} & (u > p) \\
+    0 & ({\rm {\rm otherwise}})
+  \end{array} \right.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = dy \left\{
+  \begin{array}{ll}
+    \frac{1}{1 - p} & (u > p) \\
+    0 & ({\rm {\rm otherwise}})
+  \end{array} \right.
+\end{eqnarray}
+
+
+\subsection{TopKData}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = TopKData(x).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = dy[TopKDataIndex]
+\end{eqnarray}
+
+
+\subsection{TopKGrad}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = TopKGrad(x).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = dy[TopKGradIndex].
+\end{eqnarray}
+
+
+% \subsection{Rand}
+
+% Forward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+% %
+% Backward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+
+
+% \subsection{Randint}
+
+% Forward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+% %
+% Backward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+
+
+% \subsection{Randn}
+
+% Forward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+% %
+% Backward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+
+
+% \subsection{RandBinomial}
+
+% Forward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+% %
+% Backward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+
+
+% \subsection{RandBeta}
+
+% Forward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+% %
+% Backward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+
+
+% \subsection{RandGamma}
+
+% Forward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+% %
+% Backward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+
+
+% \subsection{RandomChoice}
+
+% Forward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+% %
+% Backward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+
+
+% \subsection{RandomCrop}
+
+% Forward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+% %
+% Backward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+
+
+% \subsection{RandomFlip}
+
+% Forward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+% %
+% Backward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+
+
+% \subsection{RandomShift}
+
+% Forward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+% %
+% Backward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+
+
+% \subsection{RandomErase}
+
+% Forward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+% %
+% Backward pass:
+
+% \begin{eqnarray}
+%   TODO.  
+% \end{eqnarray}
+
+
+\section{Loss Functions}
+\label{sec:Loss Functions}
+
+\subsection{SigmoidCrossEntropy}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = - \left(x^{(1)}_i \ln \left(\sigma \left(x^{(0)}_i \right)\right) + \
+  \left(1 - x^{(1)}_i\right) \ln \left(1 - \sigma \left(x^{(0)}_i \
+  \right)\right)\right)
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(0)}_i = dy_i (\sigma_i - x^{(1)}_i)
+\end{eqnarray}
+
+
+\subsection{BinaryCrossEntropy}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = - \left(x^{(1)}_i * \ln \left(x^{(0)}_i\right) + \left(1 - \
+  x^{(1)}_i\right) * \ln \left(1 - x^{(0)}_i\right)\right).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(0)}_i = dy_i \frac{x^{(0)}_i - x^{(1)}_i}{x^{(0}_i (1 - x^{(0)}_i)}
+\end{eqnarray}
+
+
+\subsection{SoftmaxCrossEntropy}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_{i} &&= -\ln \sum_i t_i \sigma(x_i)
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_{j} &&= dy (\sigma(x_j) - t_j).
+\end{eqnarray}
+%
+where the $\sigma(x)$ is the softmax.
+
+\subsection{CategoricalCrossEntropy}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_{i} &&= -\ln \sum_i t_i x_i
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_{j} && = -dy \frac{t_j}{x_j}.
+\end{eqnarray}
+
+
+\subsection{SquaredError}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = \left(x^{(0)}_i - x^{(1)}_i\right)^2.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(0)}_i &&= dy_i \times 2 \times \left(x^{(0)}_i - x^{(1)}_i\right) \\
+  dx^{(1)}_i &&= -dy_i \times 2 \times \left(x^{(0)}_i - x^{(1)}_i\right).
+\end{eqnarray}
+
+
+\subsection{AbsoluteError}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i = | x^{(0)}_i - x^{(1)}_i |.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(0)}_i= \left\{
+  \begin{array}{ll}
+   dy_i  & (x^{(0)}_i > x^{(1)}) \\
+   -dy_i & ({\rm otherwise})
+  \end{array} \right. \\
+  dx^{(1)}_i= \left\{
+  \begin{array}{ll}
+   -dy_i  & (x^{(0)}_i > x^{(1)}) \\
+   dy_i & ({\rm otherwise})
+  \end{array} \right.
+\end{eqnarray}
+
+
+\subsection{HuberLoss}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i= \left\{
+  \begin{array}{ll}
+    (x^{(0)}_i - x^{(1)}_i)^2 & (|x^{(0)}_i - x^{(1)}_i| < \delta) \\
+    \delta (2 |x^{(0)}_i - x^{(1)}_i| - \delta) & ({\rm otherwise})
+  \end{array} \right.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(0)}_i &&= dy_i \left\{
+  \begin{array}{ll}
+    2 (x^{(0)}_i - x^{(1)}_i) & (|x^{(0)}_i - x^{(1)}_i| < \delta) \\
+    2 \delta & (|x^{(0)}_i - x^{(1)}_i| \geq \delta \ and \ x^{(0)}_i \geq x^{(1)}_i) \\
+    -2 \delta & (|x^{(0)}_i - x^{(1)}_i| \geq \delta \ and \ x^{(0)}_i < x^{(1)}_i)
+  \end{array} \right. \\
+  dx^{(1)}_i &&= dy_i \left\{
+  \begin{array}{ll}
+    - 2 (x^{(0)}_i - x^{(1)}_i) & (|x^{(0)}_i - x^{(1)}_i| < \delta) \\
+    - 2 \delta & (|x^{(0)}_i - x^{(1)}_i| \geq \delta \ and \ x^{(0)}_i \geq x^{(1)}_i) \\
+    2 \delta & (|x^{(0)}_i - x^{(1)}_i| \geq \delta \ and \ x^{(0)}_i < x^{(1)}_i)  \end{array} \right. 
+\end{eqnarray}
+
+
+\subsection{EpsilonInsensitiveLoss}
+
+Forward pass:
+
+\begin{eqnarray}
+  y_i= \left\{
+  \begin{array}{ll}
+    | x^{(0)}_i - x^{(1)}_i | - \epsilon & (| x^{(0)}_i - x^{(1)}_i | > \epsilon) \\
+    0 & ({\rm otherwise})
+  \end{array} \right.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx^{(0)}_i &&= dy_i \left\{
+  \begin{array}{ll}
+    1  & ( | x^{(0)}_i - x^{(1)}_i | > \epsilon \ and \ x^{(0)}_i >= x^{(1)}_i) \\
+    -1  & ( | x^{(0)}_i - x^{(1)}_i | > \epsilon \ and \ x^{(0)}_i < x^{(1)}_i) \\
+    0 & {\rm otherwise}
+  \end{array} \right. \\
+  dx^{(1)}_i &&= dy_i \left\{
+  \begin{array}{ll}
+    -1  & ( | x^{(0)}_i - x^{(1)}_i | > \epsilon \ and \ x^{(1)}_i >= x^{(0)}_i) \\
+    1  & ( | x^{(0)}_i - x^{(1)}_i | > \epsilon \ and \ x^{(1)}_i < x^{(0)}_i) \\
+    0 & {\rm otherwise}
+  \end{array} \right.
+\end{eqnarray}
+
+
+\subsection{KLMultinomial}
+
+Forward pass:
+
+\begin{eqnarray}
+  D = \sum_i p_i \log \left( \frac{p_i}{q_i} \right).
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dp_i &&= dD \left( \log(\frac{p_i}{q_i}) + 1 \right), \\
+  dq_i &&= dD \frac{-p_i}{q_i}.
+\end{eqnarray}
+
+
+\section{Quantization Neural Network Layers}
+\label{sec:Quantization Neural Network Layers}
+
+Quantization layers mainly relies on Straight-Through-Estimator (STE) where we use the proxy of a quantized function for deriving the backward pass of the quantized function to simulate smooth gradients. In this sence, the proxy should be closer to the quantized function and smooth one, but we can replace the gradient of a quantized function with much simplier one like $1$, meaning just pass the in-coming gradients. This sounds a bit cheating, but STE works fine in practice.
+
+\subsection{BinarySigmoid}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = \begin{cases}
+    1 & (x > 0) \\
+    0 & ({\rm {\rm otherwise}})\end{cases},
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = 0.5 * dy.
+\end{eqnarray}
+
+
+\subsection{BinaryTanh}
+
+Forward pass:
+
+\begin{eqnarray}
+  f(x) = \begin{cases}
+    1 & (x > 0) \\
+    -1 & ({\rm {\rm otherwise}})
+  \end{cases},
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  f(x) = \begin{cases}
+    1 & (x > 0) \\
+    -1 & ({\rm {\rm otherwise}})
+  \end{cases},
+\end{eqnarray}
+
+
+\subsection{Prune}
+
+Forward pass:
+
+\begin{eqnarray}
+  q_i = \left \{
+  \begin{array}{ll}
+    0   & abs(x_i) < threshold \\
+    x_i & {\rm otherwise}
+  \end{array}
+  \right.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx_i = dq_i.
+\end{eqnarray}
+
+
+\subsection{QuantizeLinear}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = saturate(round(x / s) + z).    
+\end{eqnarray}
+
+The {\it saturate} is, for example in case of int8, $clip(x, -128, 127)$. The {\it round} depends on implementation, but {\it round-to-even} or {\it round-away-from-zero} are often used. Zero-point $z$ is sometimes omitted for computational efficiency.\\ \\
+%
+Backward pass:
+  
+\begin{eqnarray}
+  dx &&= \left\{
+  \begin{array}{ll}
+    dy / s & (saturate(round(x / s)) \\
+    0 & (otherwise).
+  \end{array} \right.
+\end{eqnarray}
+
+\subsection{DequantizeLinear}
+
+Forward pass:
+
+\begin{eqnarray}
+  y = (x - z) * s.
+\end{eqnarray}
+%
+Backward pass:
+
+\begin{eqnarray}
+  dx = dy * s
+\end{eqnarray}
+
+
+% \input{references}
+\end{document}
+
+
+\bibliographystyle{plain}
+\bibliography{references}
+\end{document}

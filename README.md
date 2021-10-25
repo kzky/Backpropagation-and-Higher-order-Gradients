@@ -1,6 +1,9 @@
 # Backpropagation-and-Higher-order-Gradients
 
-This is the mathematical notes for computing the 1st-order gradientsof functions and higher-order gradients in terms of mathematical view.
+This is the mathematical notes for computing the 1st-order gradients of functions and higher-order gradients.
+
+
+See [PDF](./Backpropagation_and_Higher_order_Gradients_v0.8.pdf).
 
 
 ## Compile
@@ -16,3 +19,4 @@ If you kindly add new functions or correct some notations, please make a PR. It 
 ## TODO
 - Reccurent layers
 - The others than Reccurent layers
+
